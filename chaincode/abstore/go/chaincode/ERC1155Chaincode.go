@@ -115,9 +115,11 @@ type ToID struct {
 
 // Mint creates amount tokens of token type id and assigns them to account.
 // This function emits a TransferSingle event.
-func (s *SmartContract) Mint(ctx contractapi.TransactionContextInterface, account string, id uint64, amount uint64) error {
+func (s *SmartContract) Mint(ctx contractapi.TransactionContextInterface, tokenId uint64, categoryCode string,
+	pollingResultId string, tokenType string, totalTicket uint64, amount uint64, owner string) error {
 
-	// Check if contract has been intilized first
+	// Check if contract has been initialized first
+	// 체인코드 초기화 확인
 	initialized, err := checkInitialized(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check if contract is already initialized: %v", err)
@@ -127,25 +129,29 @@ func (s *SmartContract) Mint(ctx contractapi.TransactionContextInterface, accoun
 	}
 
 	// Check minter authorization - this sample assumes Org1 is the central banker with privilege to mint new tokens
+	// 체인코드 권한 확인
 	err = authorizationHelper(ctx)
 	if err != nil {
 		return err
 	}
 
 	// Get ID of submitting client identity
+	// 클라이언트 ID 확인
 	operator, err := ctx.GetClientIdentity().GetID()
 	if err != nil {
 		return fmt.Errorf("failed to get client id: %v", err)
 	}
 
 	// Mint tokens
-	err = mintHelper(ctx, operator, account, id, amount)
+	// 토큰 발행
+	err = mintHelper(ctx, operator, owner, tokenId, amount)
 	if err != nil {
 		return err
 	}
 
 	// Emit TransferSingle event
-	transferSingleEvent := TransferSingle{operator, "0x0", account, id, amount}
+	// 이 이벤트는 트랜잭션의 성공적인 토큰 전송을 나타내며, 해당 토큰의 발행, 소유 및 양에 대한 정보를 포함
+	transferSingleEvent := TransferSingle{operator, "0x0", owner, tokenId, amount}
 	return emitTransferSingle(ctx, transferSingleEvent)
 }
 
@@ -853,8 +859,8 @@ func authorizationHelper(ctx contractapi.TransactionContextInterface) error {
 	return nil
 }
 
-func mintHelper(ctx contractapi.TransactionContextInterface, operator string, account string, id uint64, amount uint64) error {
-	if account == "0x0" {
+func mintHelper(ctx contractapi.TransactionContextInterface, operator string, owner string, tokenId uint64, amount uint64) error {
+	if owner == "0x0" {
 		return fmt.Errorf("mint to the zero address")
 	}
 
@@ -862,7 +868,7 @@ func mintHelper(ctx contractapi.TransactionContextInterface, operator string, ac
 		return fmt.Errorf("mint amount must be a positive integer")
 	}
 
-	err := addBalance(ctx, operator, account, id, amount)
+	err := addBalance(ctx, operator, owner, tokenId, amount)
 	if err != nil {
 		return err
 	}
@@ -870,11 +876,11 @@ func mintHelper(ctx contractapi.TransactionContextInterface, operator string, ac
 	return nil
 }
 
-func addBalance(ctx contractapi.TransactionContextInterface, sender string, recipient string, id uint64, amount uint64) error {
-	// Convert id to string
-	idString := strconv.FormatUint(uint64(id), 10)
+func addBalance(ctx contractapi.TransactionContextInterface, sender string, recipient string, tokenId uint64, amount uint64) error {
+	// Convert tokenId to string
+	tokenIdString := strconv.FormatUint(uint64(tokenId), 10)
 
-	balanceKey, err := ctx.GetStub().CreateCompositeKey(balancePrefix, []string{recipient, idString, sender})
+	balanceKey, err := ctx.GetStub().CreateCompositeKey(balancePrefix, []string{recipient, tokenIdString, sender})
 	if err != nil {
 		return fmt.Errorf("failed to create the composite key for prefix %s: %v", balancePrefix, err)
 	}
