@@ -155,6 +155,36 @@ func (s *SmartContract) Mint(ctx contractapi.TransactionContextInterface, tokenI
 	return emitTransferSingle(ctx, transferSingleEvent)
 }
 
+// QueryTokensByOwner retrieves the tokens owned by a specific owner.
+func (s *SmartContract) QueryTokensByOwner(ctx contractapi.TransactionContextInterface, owner string) ([]*TransferSingle, error) {
+	queryString := fmt.Sprintf(`{"selector":{"to":"%s"}}`, owner)
+
+	resultsIterator, err := ctx.GetStub().GetQueryResult(queryString)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute a query on the world state: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	var transferEvents []*TransferSingle
+
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get query results: %v", err)
+		}
+
+		var transferEvent TransferSingle
+		err = json.Unmarshal(queryResponse.Value, &transferEvent)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal TransferSingle event: %v", err)
+		}
+
+		transferEvents = append(transferEvents, &transferEvent)
+	}
+
+	return transferEvents, nil
+}
+
 // MintBatch creates amount tokens for each token type id and assigns them to account.
 // This function emits a TransferBatch event.
 func (s *SmartContract) MintBatch(ctx contractapi.TransactionContextInterface, account string, ids []uint64, amounts []uint64) error {
