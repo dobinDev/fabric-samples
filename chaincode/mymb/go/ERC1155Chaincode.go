@@ -54,6 +54,70 @@ func (tc *TokenContract) MintTokens(ctx contractapi.TransactionContextInterface,
 	return nil
 }
 
+// GetAllTokens retrieves all tokens stored in the world state
+// World State에 저장된 모든 토큰을 검색
+func (tc *TokenContract) GetAllTokens(ctx contractapi.TransactionContextInterface) ([]*TokenAsset, error) {
+	// Get all tokens from the world state
+	resultsIterator, err := ctx.GetStub().GetStateByPartialCompositeKey("token", []string{})
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get tokens: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	// Iterate through the result set
+	var tokens []*TokenAsset
+	for resultsIterator.HasNext() {
+		responseRange, err := resultsIterator.Next()
+		if err != nil {
+			return nil, fmt.Errorf("Failed to iterate over tokens: %v", err)
+		}
+
+		// Unmarshal the token from JSON
+		var token TokenAsset
+		err = json.Unmarshal(responseRange.Value, &token)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to unmarshal token from JSON: %v", err)
+		}
+
+		// Append the token to the result set
+		tokens = append(tokens, &token)
+	}
+
+	return tokens, nil
+}
+
+// GetTokensByOwner retrieves tokens owned by a specific owner
+// 특정 소유자가 소유한 모든 토큰을 검색
+func (tc *TokenContract) GetTokensByOwner(ctx contractapi.TransactionContextInterface, owner string) ([]*TokenAsset, error) {
+	// Get all tokens from the world state
+	resultsIterator, err := ctx.GetStub().GetStateByPartialCompositeKey("token", []string{"owner", owner})
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get tokens: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	// Iterate through the result set
+	var tokens []*TokenAsset
+	for resultsIterator.HasNext() {
+		responseRange, err := resultsIterator.Next()
+		if err != nil {
+			return nil, fmt.Errorf("Failed to iterate over tokens: %v", err)
+		}
+
+		// Unmarshal the token from JSON
+		var token TokenAsset
+		err = json.Unmarshal(responseRange.Value, &token)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to unmarshal token from JSON: %v", err)
+		}
+
+		// Append the token to the result set
+		tokens = append(tokens, &token)
+	}
+
+	return tokens, nil
+}
+
 // TransferTokens transfers tokens from one owner to another
 // 특정 토큰을 한 소유자에서 다른 소유자로 이전
 // 호출된 토큰 ID가 World State에 존재하는지 확인하고, 토큰의 소유자가 호출자인지 확인.
