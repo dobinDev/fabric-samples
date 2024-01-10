@@ -50,7 +50,6 @@ func (tc *TokenContract) MintTokens(ctx contractapi.TransactionContextInterface,
 	if err != nil {
 		return fmt.Errorf("Failed to write to world state: %v", err)
 	}
-
 	return nil
 }
 
@@ -78,7 +77,6 @@ func (tc *TokenContract) GetAllTokens(ctx contractapi.TransactionContextInterfac
 		if err != nil {
 			return nil, fmt.Errorf("Failed to unmarshal token from JSON: %v", err)
 		}
-
 		// Append the token to the result set
 		tokens = append(tokens, &token)
 	}
@@ -114,7 +112,6 @@ func (tc *TokenContract) GetTokensByOwner(ctx contractapi.TransactionContextInte
 		// Append the token to the result set
 		tokens = append(tokens, &token)
 	}
-
 	return tokens, nil
 }
 
@@ -164,7 +161,6 @@ func (tc *TokenContract) TransferTokens(ctx contractapi.TransactionContextInterf
 	if err != nil {
 		return fmt.Errorf("Failed to write to world state: %v", err)
 	}
-
 	return nil
 }
 
