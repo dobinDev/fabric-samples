@@ -99,36 +99,14 @@ func (s *SmartContract) GetToken(ctx contractapi.TransactionContext, tokenId uin
 
 func main() {
 	// Create a new contract instance
+	// 스마트 계약의 인스턴스를 생성.
 	contract := &SmartContract{}
 
 	// Initialize the contract
+	// 원장을 초기화.
 	err := contract.InitLedger(nil)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-
-	// Issue a new token
-	err = contract.IssueToken(nil, "owner", 1, 100)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	// Transfer the token
-	err = contract.TransferToken(nil, "owner", "recipient", 1, 50)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	// Get the token
-	token, err := contract.GetToken(nil, 1)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	fmt.Println("Token ID:", token.Id)
-	fmt.Println("Amount:", token.Amount)
 }
