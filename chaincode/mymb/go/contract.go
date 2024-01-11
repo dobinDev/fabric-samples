@@ -54,7 +54,7 @@ func (s *SmartContract) IssueToken(ctx contractapi.TransactionContext, owner str
 */
 func (s *SmartContract) TransferToken(ctx contractapi.TransactionContext, from string, to string, tokenId uint64, amount uint64) error {
 	// Check that the caller owns the token
-	token, err := s.GetToken(ctx, tokenId)
+	token, err := getToken(ctx, tokenId)
 	if err != nil {
 		return err
 	}
@@ -75,25 +75,21 @@ func (s *SmartContract) TransferToken(ctx contractapi.TransactionContext, from s
 	}
 }
 
-// GetToken gets an ERC-1155 token
+// Get the token from the ledger and unmarshal it from JSON.
 /*
 	- 원장에서 토큰 조회
 	- JSON 형식으로 토큰 정보 반환
 */
-func (s *SmartContract) GetToken(ctx contractapi.TransactionContext, tokenId uint64) (*ERC1155Token, error) {
-	// Get the token from the ledger
+func getToken(ctx contractapi.TransactionContext, tokenId uint64) (*ERC1155Token, error) {
 	tokenBytes, err := ctx.GetStub().GetState(tokenId)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get token: %w", err)
 	}
-
-	// Unmarshal the token
 	token := &ERC1155Token{}
 	err = json.Unmarshal(tokenBytes, token)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal token: %w", err)
 	}
-
 	return token, nil
 }
 
