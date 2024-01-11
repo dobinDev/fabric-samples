@@ -148,8 +148,8 @@ func main() {
 	contract := new(SmartContract)
 
 	// Initialize the contract
-	ctx := contractapi.TransactionContext{} // 올바른 트랜잭션 컨텍스트를 생성해야 함
-	err := contract.InitLedger(&ctx)
+	ctx := &contractapi.TransactionContext{} // 올바른 트랜잭션 컨텍스트를 생성해야 함
+	err := contract.InitLedger(ctx)
 	if err != nil {
 		fmt.Println(err)
 		return
