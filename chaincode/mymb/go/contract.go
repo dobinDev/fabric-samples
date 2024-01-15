@@ -3,155 +3,149 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
-// SmartContract is the contract structure
-type SmartContract struct {
+type TokenERC1155Contract struct {
 	contractapi.Contract
 }
 
-// ERC1155Token is the ERC-1155 token struct
-type ERC1155Token struct {
-	Id     string `json:"id"`
+type Token1155 struct {
+	ID     string `json:"id"`
+	Amount uint   `json:"amount"`
 	Owner  string `json:"owner"`
-	Amount uint64 `json:"amount"`
 }
 
-// InitLedger initializes the ledger
-func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) error {
-	// 초기화 로직 추가
-	// 예: 특정 토큰을 미리 발행하거나 초기 상태를 설정하는 등의 동작
-	return nil
+type QueryResult struct {
+	Key    string    `json:"Key"`
+	Record Token1155 `json:"Record"`
 }
 
-// IssueToken issues a new ERC-1155 token
-/*
-	- 토큰 발급 권한 확인
-	- 새로운 ERC-1155 토큰 생성
-	- 토큰 정보를 원장에 저장
-*/
-func (s *SmartContract) IssueToken(ctx contractapi.TransactionContextInterface, owner string, tokenId uint64, amount uint64) error {
+const (
+	tokenPrefix   = "token"
+	balancePrefix = "balance"
+)
 
-	// Check that the caller is authorized to issue tokens
-	caller, err := ctx.GetClientIdentity().GetID()
+func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInterface, tokenID string, amount uint, ownerID string) (*Token1155, error) {
+	exists, err := c.tokenExists(ctx, tokenID)
 	if err != nil {
-		return fmt.Errorf("failed to get caller identity: %w", err)
+		return nil, err
+	}
+	if exists {
+		return nil, fmt.Errorf("token with ID %s already exists", tokenID)
 	}
 
-	if owner != caller {
-		return fmt.Errorf("caller is not authorized to issue tokens")
-	}
-
-	// Create a new ERC-1155 token
-	token := &ERC1155Token{
-		Id:     fmt.Sprintf("%d", tokenId),
-		Owner:  owner,
+	token := Token1155{
+		ID:     tokenID,
 		Amount: amount,
+		Owner:  ownerID,
 	}
 
-	// Save the token to the ledger
+	tokenKey, err := ctx.GetStub().CreateCompositeKey(tokenPrefix, []string{tokenID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create composite key: %v", err)
+	}
+
 	tokenBytes, err := json.Marshal(token)
 	if err != nil {
-		return fmt.Errorf("failed to marshal token: %w", err)
+		return nil, fmt.Errorf("failed to marshal token: %v", err)
 	}
-	err = ctx.GetStub().PutState(token.Id, tokenBytes)
+
+	err = ctx.GetStub().PutState(tokenKey, tokenBytes)
 	if err != nil {
-		return fmt.Errorf("failed to put state: %w", err)
+		return nil, fmt.Errorf("failed to put state: %v", err)
 	}
-	return nil
+
+	balanceKey, err := ctx.GetStub().CreateCompositeKey(balancePrefix, []string{ownerID, tokenID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create composite key for balance: %v", err)
+	}
+
+	err = ctx.GetStub().PutState(balanceKey, []byte(fmt.Sprintf("%d", amount)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to update balance: %v", err)
+	}
+
+	return &token, nil
 }
 
-// TransferToken transfers an ERC-1155 token
-/*
-	- 토큰 소유권 확인
-	- 토큰 수신자 유효성 검사
-	- 토큰 잔액 갱신
-	- 토큰 잔액이 0이면 원장에서 삭제
-*/
-func (s *SmartContract) TransferToken(ctx contractapi.TransactionContextInterface, from string, to string, tokenId uint64, amount uint64) error {
-
-	// Check that the caller owns the token
-	fromToken, err := s.getToken(ctx, tokenId)
+func (c *TokenERC1155Contract) GetToken(ctx contractapi.TransactionContextInterface, tokenID string) (*Token1155, error) {
+	tokenKey, err := ctx.GetStub().CreateCompositeKey(tokenPrefix, []string{tokenID})
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed to create composite key: %v", err)
 	}
 
-	if fromToken.Owner != from {
-		return fmt.Errorf("caller is not the owner of the token")
-	}
-
-	// Update the token balance
-	fromToken.Amount -= amount
-
-	// Get or create the destination token
-	toToken, err := s.getToken(ctx, tokenId)
+	tokenBytes, err := ctx.GetStub().GetState(tokenKey)
 	if err != nil {
-		toToken = &ERC1155Token{
-			Id:     fmt.Sprintf("%d", tokenId),
-			Owner:  to,
-			Amount: 0,
-		}
-	}
-	toToken.Amount += amount
-
-	// Save the tokens to the ledger
-	if fromToken.Amount == 0 {
-		err = ctx.GetStub().DelState(fromToken.Id)
-	} else {
-		tokenBytes, err := json.Marshal(fromToken)
-		if err != nil {
-			return fmt.Errorf("failed to marshal token: %w", err)
-		}
-		err = ctx.GetStub().PutState(fromToken.Id, tokenBytes)
-		if err != nil {
-			return fmt.Errorf("failed to put state for fromToken: %w", err)
-		}
+		return nil, fmt.Errorf("failed to get state: %v", err)
 	}
 
-	tokenBytes, err := json.Marshal(toToken)
-	if err != nil {
-		return fmt.Errorf("failed to marshal token: %w", err)
-	}
-	err = ctx.GetStub().PutState(toToken.Id, tokenBytes)
-	if err != nil {
-		return fmt.Errorf("failed to put state for toToken: %w", err)
-	}
-
-	return nil
-}
-
-// Get the token from the ledger and unmarshal it from JSON.
-/*
-	- 원장에서 토큰 조회
-	- JSON 형식으로 토큰 정보 반환
-*/
-// Get the token from the ledger and unmarshal it from JSON.
-func (s *SmartContract) getToken(ctx contractapi.TransactionContextInterface, tokenId uint64) (*ERC1155Token, error) {
-	tokenBytes, err := ctx.GetStub().GetState(fmt.Sprintf("%d", tokenId))
-	if err != nil {
-		return nil, fmt.Errorf("failed to get token: %w", err)
-	}
 	if tokenBytes == nil {
-		return nil, fmt.Errorf("token not found")
+		return nil, fmt.Errorf("token with ID %s does not exist", tokenID)
 	}
-	token := &ERC1155Token{}
-	err = json.Unmarshal(tokenBytes, token)
+
+	var token Token1155
+	err = json.Unmarshal(tokenBytes, &token)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal token: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal token: %v", err)
 	}
-	return token, nil
+
+	return &token, nil
+}
+
+func (c *TokenERC1155Contract) tokenExists(ctx contractapi.TransactionContextInterface, tokenID string) (bool, error) {
+	tokenKey, err := ctx.GetStub().CreateCompositeKey(tokenPrefix, []string{tokenID})
+	if err != nil {
+		return false, fmt.Errorf("failed to create composite key: %v", err)
+	}
+
+	tokenBytes, err := ctx.GetStub().GetState(tokenKey)
+	if err != nil {
+		return false, fmt.Errorf("failed to get state: %v", err)
+	}
+
+	return tokenBytes != nil, nil
+}
+
+func (c *TokenERC1155Contract) GetAllTokens(ctx contractapi.TransactionContextInterface) ([]QueryResult, error) {
+	resultsIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(tokenPrefix, []string{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get state by partial composite key: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	var results []QueryResult
+
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get next query response: %v", err)
+		}
+
+		var token Token1155
+		err = json.Unmarshal(queryResponse.Value, &token)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal token: %v", err)
+		}
+
+		results = append(results, QueryResult{
+			Key:    queryResponse.Key,
+			Record: token,
+		})
+	}
+
+	return results, nil
 }
 
 func main() {
-	// Create a new contract instance
-	contract := new(SmartContract)
-
-	// Initialize the contract
-	ctx := &contractapi.TransactionContext{} // 올바른 트랜잭션 컨텍스트를 생성해야 함
-	err := contract.InitLedger(ctx)
+	// The main function is not required for Hyperledger Fabric chaincode
+	// It's here only for demonstration purposes
+	cc, err := contractapi.NewChaincode(new(TokenERC1155Contract))
 	if err != nil {
-		fmt.Println(err)
-		return
+		panic(err.Error())
+	}
+	if err := cc.Start(); err != nil {
+		fmt.Printf("Error starting TokenERC1155Contract chaincode: %s", err)
 	}
 }
