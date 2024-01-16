@@ -12,9 +12,13 @@ type TokenERC1155Contract struct {
 }
 
 type Token1155 struct {
-	ID     string `json:"id"`
-	Amount uint   `json:"amount"`
-	Owner  string `json:"owner"`
+	TokenID         string `json:"TokenID"`
+	CategoryCode    uint   `json:"CategoryCode"`
+	PollingResultID uint   `json:"PollingResultID"`
+	TokenType       string `json:"TokenType"`
+	TotalTicket     uint   `json:"TotalTicket"`
+	Amount          uint   `json:"amount"`
+	Owner           string `json:"Owner"`
 }
 
 type QueryResult struct {
@@ -27,7 +31,9 @@ const (
 	balancePrefix = "balance"
 )
 
-func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInterface, tokenID string, amount uint, ownerID string) (*Token1155, error) {
+func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInterface,
+	tokenID string, categoryCode uint, pollingResultID uint, tokenType string, totalTicket uint,
+	amount uint, ownerID string) (*Token1155, error) {
 	exists, err := c.tokenExists(ctx, tokenID)
 	if err != nil {
 		return nil, err
@@ -37,9 +43,13 @@ func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInter
 	}
 
 	token := Token1155{
-		ID:     tokenID,
-		Amount: amount,
-		Owner:  ownerID,
+		TokenID:         tokenID,
+		CategoryCode:    categoryCode,
+		PollingResultID: pollingResultID,
+		TokenType:       tokenType,
+		TotalTicket:     totalTicket,
+		Amount:          amount,
+		Owner:           ownerID,
 	}
 
 	tokenKey, err := ctx.GetStub().CreateCompositeKey(tokenPrefix, []string{tokenID})
