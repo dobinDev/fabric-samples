@@ -1,10 +1,11 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
+	"time"
 )
 
 type TokenERC1155Contract struct {
@@ -32,16 +33,18 @@ const (
 )
 
 func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInterface,
-	tokenID string, categoryCode uint, pollingResultID uint, tokenType string, totalTicket uint,
+	categoryCode uint, pollingResultID uint, tokenType string, totalTicket uint,
 	amount uint, ownerID string) (*Token1155, error) {
-	exists, err := c.tokenExists(ctx, tokenID)
-	if err != nil {
-		return nil, err
-	}
-	if exists {
-		return nil, fmt.Errorf("token with ID %s already exists", tokenID)
-	}
 
+	// 유니크한 데이터 생성
+	uniqueData := fmt.Sprintf("%d%d%s", ownerID, totalTicket, time.Now().String())
+
+	// SHA256 해시 생성
+	hash := sha256.New()
+	hash.Write([]byte(uniqueData))
+	tokenID := fmt.Sprintf("%x", hash.Sum(nil))
+
+	// Token 생성
 	token := Token1155{
 		TokenID:         tokenID,
 		CategoryCode:    categoryCode,
@@ -52,6 +55,7 @@ func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInter
 		Owner:           ownerID,
 	}
 
+	// TokenID, Owner, Amount 저장
 	tokenKey, err := ctx.GetStub().CreateCompositeKey(tokenPrefix, []string{tokenID})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create composite key: %v", err)
@@ -104,20 +108,6 @@ func (c *TokenERC1155Contract) GetToken(ctx contractapi.TransactionContextInterf
 	return &token, nil
 }
 
-func (c *TokenERC1155Contract) tokenExists(ctx contractapi.TransactionContextInterface, tokenID string) (bool, error) {
-	tokenKey, err := ctx.GetStub().CreateCompositeKey(tokenPrefix, []string{tokenID})
-	if err != nil {
-		return false, fmt.Errorf("failed to create composite key: %v", err)
-	}
-
-	tokenBytes, err := ctx.GetStub().GetState(tokenKey)
-	if err != nil {
-		return false, fmt.Errorf("failed to get state: %v", err)
-	}
-
-	return tokenBytes != nil, nil
-}
-
 func (c *TokenERC1155Contract) GetAllTokens(ctx contractapi.TransactionContextInterface) ([]QueryResult, error) {
 	resultsIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(tokenPrefix, []string{})
 	if err != nil {
@@ -147,6 +137,20 @@ func (c *TokenERC1155Contract) GetAllTokens(ctx contractapi.TransactionContextIn
 
 	return results, nil
 }
+
+/*func (c *TokenERC1155Contract) tokenExists(ctx contractapi.TransactionContextInterface, tokenID string) (bool, error) {
+	tokenKey, err := ctx.GetStub().CreateCompositeKey(tokenPrefix, []string{tokenID})
+	if err != nil {
+		return false, fmt.Errorf("failed to create composite key: %v", err)
+	}
+
+	tokenBytes, err := ctx.GetStub().GetState(tokenKey)
+	if err != nil {
+		return false, fmt.Errorf("failed to get state: %v", err)
+	}
+
+	return tokenBytes != nil, nil
+}*/
 
 func main() {
 	// The main function is not required for Hyperledger Fabric chaincode
