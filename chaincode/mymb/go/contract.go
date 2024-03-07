@@ -45,7 +45,7 @@ func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInter
 	hashBytes := hash.Sum(nil)
 
 	// TokenID 생성 (0x를 앞에 붙여서 생성)
-	tokenID := fmt.Sprintf("0x%x", hashBytes)
+	tokenID = fmt.Sprintf("0x%x", hashBytes)
 
 	// Token 생성
 	token := Token1155{
