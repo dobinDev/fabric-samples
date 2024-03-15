@@ -33,8 +33,8 @@ const (
 )
 
 func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInterface,
-	categoryCode uint, pollingResultID uint, tokenType string, totalTicket uint,
-	amount uint, ownerID string) (*Token1155, error) {
+	tokenID string, categoryCode uint, pollingResultID uint, tokenType string,
+	totalTicket uint, amount uint, ownerID string) (*Token1155, error) {
 
 	// 유니크한 데이터 생성
 	uniqueData := fmt.Sprintf("%d%d%s", ownerID, totalTicket, time.Now().String())
@@ -45,7 +45,7 @@ func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInter
 	hashBytes := hash.Sum(nil)
 
 	// TokenID 생성 (0x를 앞에 붙여서 생성)
-	tokenID := fmt.Sprintf("0x%x", hashBytes)
+	tokenID = fmt.Sprintf("0x%x", hashBytes)
 
 	// Token 생성
 	token := Token1155{
