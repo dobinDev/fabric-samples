@@ -13,13 +13,13 @@ type TokenERC1155Contract struct {
 }
 
 type Token1155 struct {
-	TokenID         string `json:"TokenID"`
-	CategoryCode    uint   `json:"CategoryCode"`
-	PollingResultID uint   `json:"PollingResultID"`
-	TokenType       string `json:"TokenType"`
-	TotalTicket     uint   `json:"TotalTicket"`
+	TokenID         string `json:"tokenID"`
+	CategoryCode    uint   `json:"categoryCode"`
+	PollingResultID uint   `json:"pollingResultID"`
+	TokenType       string `json:"tokenType"`
+	TotalTicket     uint   `json:"totalTicket"`
 	Amount          uint   `json:"amount"`
-	Owner           string `json:"Owner"`
+	Owner           string `json:"owner"`
 }
 
 type QueryResult struct {
