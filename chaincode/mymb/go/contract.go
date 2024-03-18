@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
+	"github.com/pelletier/go-toml"
 	"time"
 )
 
@@ -13,13 +14,19 @@ type TokenERC1155Contract struct {
 }
 
 type Token1155 struct {
-	TokenID         string `json:"TokenID"`
-	CategoryCode    uint   `json:"CategoryCode"`
-	PollingResultID uint   `json:"PollingResultID"`
-	TokenType       string `json:"TokenType"`
-	TotalTicket     uint   `json:"TotalTicket"`
-	Amount          uint   `json:"amount"`
-	Owner           string `json:"Owner"`
+	TokenID          string             `json:"TokenID"`
+	CategoryCode     uint               `json:"CategoryCode"`
+	PollingResultID  uint               `json:"PollingResultID"`
+	TokenType        string             `json:"TokenType"`
+	TotalTicket      uint               `json:"TotalTicket"`
+	Amount           uint               `json:"amount"`
+	TokenCreatedTime toml.LocalDateTime `json:"amount"`
+}
+
+type User struct {
+	nickName
+	BlockCreatedTime
+	totalToken
 }
 
 type QueryResult struct {
