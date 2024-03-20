@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
-	"github.com/pelletier/go-toml"
+	"strconv"
 	"time"
 )
 
@@ -14,19 +14,19 @@ type TokenERC1155Contract struct {
 }
 
 type Token1155 struct {
-	TokenID          string             `json:"TokenID"`
-	CategoryCode     uint               `json:"CategoryCode"`
-	PollingResultID  uint               `json:"PollingResultID"`
-	TokenType        string             `json:"TokenType"`
-	TotalTicket      uint               `json:"TotalTicket"`
-	Amount           uint               `json:"amount"`
-	TokenCreatedTime toml.LocalDateTime `json:"amount"`
+	TokenID          string    `json:"TokenID"`
+	CategoryCode     uint64    `json:"CategoryCode"`
+	PollingResultID  uint64    `json:"PollingResultID"`
+	TokenType        string    `json:"TokenType"`
+	TotalTicket      uint64    `json:"TotalTicket"`
+	Amount           uint64    `json:"Amount"`
+	TokenCreatedTime time.Time `json:"TokenCreatedTime"`
 }
 
 type User struct {
-	nickName
-	BlockCreatedTime
-	totalToken
+	NickName         string    `json:"NickName"`
+	OwnedNFT         string    `json:"OwnedNFT"`
+	BlockCreatedTime time.Time `json:"BlockCreatedTime"`
 }
 
 type QueryResult struct {
@@ -40,11 +40,11 @@ const (
 )
 
 func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInterface,
-	tokenID string, categoryCode uint, pollingResultID uint, tokenType string,
-	totalTicket uint, amount uint, ownerID string) (*Token1155, error) {
+	tokenID string, categoryCode uint64, pollingResultID uint64, tokenType string,
+	totalTicket uint64, amount uint64, tokenCreatedTime time.Time) (*Token1155, error) {
 
 	// 유니크한 데이터 생성
-	uniqueData := fmt.Sprintf("%d%d%s", ownerID, totalTicket, time.Now().String())
+	uniqueData := fmt.Sprintf("%d%s", totalTicket, time.Now().String())
 
 	// SHA256 해시 생성
 	hash := sha256.New()
@@ -56,13 +56,13 @@ func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInter
 
 	// Token 생성
 	token := Token1155{
-		TokenID:         tokenID,
-		CategoryCode:    categoryCode,
-		PollingResultID: pollingResultID,
-		TokenType:       tokenType,
-		TotalTicket:     totalTicket,
-		Amount:          amount,
-		Owner:           ownerID,
+		TokenID:          tokenID,
+		CategoryCode:     categoryCode,
+		PollingResultID:  pollingResultID,
+		TokenType:        tokenType,
+		TotalTicket:      totalTicket,
+		Amount:           amount,
+		TokenCreatedTime: tokenCreatedTime,
 	}
 
 	// TokenID, Owner, Amount 저장
@@ -81,7 +81,7 @@ func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInter
 		return nil, fmt.Errorf("failed to put state: %v", err)
 	}
 
-	balanceKey, err := ctx.GetStub().CreateCompositeKey(balancePrefix, []string{ownerID, tokenID})
+	balanceKey, err := ctx.GetStub().CreateCompositeKey(balancePrefix, []string{tokenID})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create composite key for balance: %v", err)
 	}
@@ -148,19 +148,72 @@ func (c *TokenERC1155Contract) GetAllTokens(ctx contractapi.TransactionContextIn
 	return results, nil
 }
 
-/*func (c *TokenERC1155Contract) tokenExists(ctx contractapi.TransactionContextInterface, tokenID string) (bool, error) {
-	tokenKey, err := ctx.GetStub().CreateCompositeKey(tokenPrefix, []string{tokenID})
+/*
+1. TransferToken 함수는 contractapi.TransactionContextInterface 인터페이스를 받아서 스마트 계약의 트랜잭션 컨텍스트를 제공합니다.
+이 함수는 송신자의 주소(from), 수신자의 주소(to), 전송할 토큰의 ID(tokenID), 그리고 전송할 토큰의 양(amount)을 매개변수로 받습니다.
+2. 송신자 잔고 확인: 송신자의 잔고를 확인하기 위해 먼저 송신자의 주소와 토큰 ID를 사용하여 컴포지트 키를 생성합니다.
+그 후, 해당 키를 사용하여 송신자의 잔고를 조회합니다. 만약 송신자의 잔고가 없으면 해당하는 오류 메시지를 반환합니다.
+3. 받는 사람의 잔고 업데이트: 받는 사람의 주소와 토큰 ID를 사용하여 받는 사람의 잔고를 업데이트합니다.
+먼저 받는 사람의 잔고를 조회하고, 만약 잔고가 존재한다면 이를 uint64로 변환하여 증가시킨 후, 다시 상태 데이터베이스에 저장합니다.
+4. 송신자의 잔고 업데이트: 마지막으로, 송신자의 잔고를 감소시킵니다. 송신자의 잔고에서 전송된 양을 뺀 후,
+이를 다시 상태 데이터베이스에 저장합니다.
+5. 오류 처리: 각 단계에서 발생하는 오류는 적절한 오류 메시지와 함께 반환됩니다.
+*/
+
+func (c *TokenERC1155Contract) TransferToken(ctx contractapi.TransactionContextInterface, from string, to string,
+	tokenID string, amount uint64) error {
+
+	// 송신자 잔고 확인
+	fromBalanceKey, err := ctx.GetStub().CreateCompositeKey(balancePrefix, []string{from, tokenID})
 	if err != nil {
-		return false, fmt.Errorf("failed to create composite key: %v", err)
+		return fmt.Errorf("failed to create composite key for sender balance: %v", err)
+	}
+	fromBalanceBytes, err := ctx.GetStub().GetState(fromBalanceKey)
+	if err != nil {
+		return fmt.Errorf("failed to read sender balance: %v", err)
+	}
+	if fromBalanceBytes == nil {
+		return fmt.Errorf("sender %s does not have balance for token %s", from, tokenID)
+	}
+	fromBalance, err := strconv.ParseUint(string(fromBalanceBytes), 10, 64)
+	if err != nil {
+		return fmt.Errorf("failed to convert sender balance to uint: %v", err)
+	}
+	if fromBalance < amount {
+		return fmt.Errorf("sender %s does not have enough balance for token %s", from, tokenID)
 	}
 
-	tokenBytes, err := ctx.GetStub().GetState(tokenKey)
+	// 받는 사람의 잔고 업데이트
+	toBalanceKey, err := ctx.GetStub().CreateCompositeKey(balancePrefix, []string{to, tokenID})
 	if err != nil {
-		return false, fmt.Errorf("failed to get state: %v", err)
+		return fmt.Errorf("failed to create composite key for receiver balance: %v", err)
+	}
+	toBalanceBytes, err := ctx.GetStub().GetState(toBalanceKey)
+	if err != nil {
+		return fmt.Errorf("failed to read receiver balance: %v", err)
+	}
+	toBalance := uint64(0)
+	if toBalanceBytes != nil {
+		toBalance, err = strconv.ParseUint(string(toBalanceBytes), 10, 64)
+		if err != nil {
+			return fmt.Errorf("failed to convert receiver balance to uint: %v", err)
+		}
+	}
+	toBalance += amount
+	err = ctx.GetStub().PutState(toBalanceKey, []byte(fmt.Sprintf("%d", toBalance)))
+	if err != nil {
+		return fmt.Errorf("failed to update receiver balance: %v", err)
 	}
 
-	return tokenBytes != nil, nil
-}*/
+	// 송신자의 잔고 업데이트
+	fromBalance -= amount
+	err = ctx.GetStub().PutState(fromBalanceKey, []byte(fmt.Sprintf("%d", fromBalance)))
+	if err != nil {
+		return fmt.Errorf("failed to update sender balance: %v", err)
+	}
+
+	return nil
+}
 
 func main() {
 	// The main function is not required for Hyperledger Fabric chaincode
