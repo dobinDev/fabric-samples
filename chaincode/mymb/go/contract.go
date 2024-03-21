@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 	"strconv"
 	"time"
@@ -25,7 +26,8 @@ type Token1155 struct {
 
 type User struct {
 	NickName         string    `json:"NickName"`
-	OwnedNFT         string    `json:"OwnedNFT"`
+	MymPoint         uint64    `json:"MymPoint"`
+	OwnedToken       string    `json:"OwnedToken"`
 	BlockCreatedTime time.Time `json:"BlockCreatedTime"`
 }
 
@@ -41,18 +43,26 @@ const (
 
 func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInterface,
 	tokenID string, categoryCode uint64, pollingResultID uint64, tokenType string,
-	totalTicket uint64, amount uint64, tokenCreatedTime time.Time) (*Token1155, error) {
+	totalTicket uint64, amount uint64) (*Token1155, error) {
 
-	// 유니크한 데이터 생성
-	uniqueData := fmt.Sprintf("%d%s", totalTicket, time.Now().String())
+	// UUID 생성
+	uuid := uuid.New()
 
-	// SHA256 해시 생성
-	hash := sha256.New()
-	hash.Write([]byte(uniqueData))
-	hashBytes := hash.Sum(nil)
+	// TokenID 생성
+	tokenID = fmt.Sprintf("0x%x", sha256.Sum256([]byte(uuid.String())))
 
-	// TokenID 생성 (0x를 앞에 붙여서 생성)
-	tokenID = fmt.Sprintf("0x%x", hashBytes)
+	/*
+		// 유니크한 데이터 생성
+		uniqueData := fmt.Sprintf("%d%d%d%d%s", categoryCode, pollingResultID, totalTicket, amount, time.Now().String())
+
+		// SHA256 해시 생성
+		hash := sha256.New()
+		hash.Write([]byte(uniqueData))
+		hashBytes := hash.Sum(nil)
+
+		// TokenID 생성 (0x를 앞에 붙여서 생성)
+		tokenID = fmt.Sprintf("0x%x", hashBytes)
+	*/
 
 	// Token 생성
 	token := Token1155{
@@ -62,10 +72,10 @@ func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInter
 		TokenType:        tokenType,
 		TotalTicket:      totalTicket,
 		Amount:           amount,
-		TokenCreatedTime: tokenCreatedTime,
+		TokenCreatedTime: time.Now(), // 현재 시간 사용
 	}
 
-	// TokenID, Owner, Amount 저장
+	// TokenID, Token 저장
 	tokenKey, err := ctx.GetStub().CreateCompositeKey(tokenPrefix, []string{tokenID})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create composite key: %v", err)
@@ -81,6 +91,7 @@ func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInter
 		return nil, fmt.Errorf("failed to put state: %v", err)
 	}
 
+	// TokenID, Amount 저장
 	balanceKey, err := ctx.GetStub().CreateCompositeKey(balancePrefix, []string{tokenID})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create composite key for balance: %v", err)
@@ -94,7 +105,67 @@ func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInter
 	return &token, nil
 }
 
+func (c *TokenERC1155Contract) CreateUserBlock(ctx contractapi.TransactionContextInterface, nickname string,
+	mymPoint uint64, ownedToken string) error {
+
+	// User 생성
+	user := User{
+		NickName:         nickname,
+		MymPoint:         mymPoint,
+		OwnedToken:       ownedToken,
+		BlockCreatedTime: time.Now(),
+	}
+
+	// User 블록 저장
+	userKey := nickname // 닉네임 을 키로 사용
+	userBytes, err := json.Marshal(user)
+	if err != nil {
+		return fmt.Errorf("failed to marsshal usser block: %v", err)
+	}
+
+	err = ctx.GetStub().PutState(userKey, userBytes)
+	if err != nil {
+		return fmt.Errorf("failed to put state for user block: %v", err)
+	}
+	return nil
+}
+
+func (c *TokenERC1155Contract) UpdateMymPoint(ctx contractapi.TransactionContextInterface, nickname string, delta int64) error {
+
+	// 기존 유저 정보 가져오기
+	userKey := nickname
+	userBytes, err := ctx.GetStub().GetState(userKey)
+	if err != nil {
+		return fmt.Errorf("failed to read user block: %v", err)
+	}
+	if userBytes == nil {
+		return fmt.Errorf("user with nickname %s does not exist", nickname)
+	}
+
+	var user User
+	err = json.Unmarshal(userBytes, &user)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal user block: %v", err)
+	}
+
+	// MymPoint 업데이트
+	user.MymPoint += uint64(delta)
+
+	// 업데이트된 유저 정보 저장
+	userBytes, err = json.Marshal(user)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated user block: %v", err)
+	}
+
+	err = ctx.GetStub().PutState(userKey, userBytes)
+	if err != nil {
+		return fmt.Errorf("failed to put state for updated user block: %v", err)
+	}
+	return nil
+}
+
 func (c *TokenERC1155Contract) GetToken(ctx contractapi.TransactionContextInterface, tokenID string) (*Token1155, error) {
+
 	tokenKey, err := ctx.GetStub().CreateCompositeKey(tokenPrefix, []string{tokenID})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create composite key: %v", err)
@@ -110,6 +181,7 @@ func (c *TokenERC1155Contract) GetToken(ctx contractapi.TransactionContextInterf
 	}
 
 	var token Token1155
+
 	err = json.Unmarshal(tokenBytes, &token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal token: %v", err)
@@ -119,6 +191,7 @@ func (c *TokenERC1155Contract) GetToken(ctx contractapi.TransactionContextInterf
 }
 
 func (c *TokenERC1155Contract) GetAllTokens(ctx contractapi.TransactionContextInterface) ([]QueryResult, error) {
+
 	resultsIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(tokenPrefix, []string{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get state by partial composite key: %v", err)
@@ -160,25 +233,29 @@ func (c *TokenERC1155Contract) GetAllTokens(ctx contractapi.TransactionContextIn
 5. 오류 처리: 각 단계에서 발생하는 오류는 적절한 오류 메시지와 함께 반환됩니다.
 */
 
-func (c *TokenERC1155Contract) TransferToken(ctx contractapi.TransactionContextInterface, from string, to string,
-	tokenID string, amount uint64) error {
+func (c *TokenERC1155Contract) TransferToken(ctx contractapi.TransactionContextInterface,
+	from string, to string, tokenID string, amount uint64) error {
 
 	// 송신자 잔고 확인
 	fromBalanceKey, err := ctx.GetStub().CreateCompositeKey(balancePrefix, []string{from, tokenID})
 	if err != nil {
 		return fmt.Errorf("failed to create composite key for sender balance: %v", err)
 	}
+
 	fromBalanceBytes, err := ctx.GetStub().GetState(fromBalanceKey)
 	if err != nil {
 		return fmt.Errorf("failed to read sender balance: %v", err)
 	}
+
 	if fromBalanceBytes == nil {
 		return fmt.Errorf("sender %s does not have balance for token %s", from, tokenID)
 	}
+
 	fromBalance, err := strconv.ParseUint(string(fromBalanceBytes), 10, 64)
 	if err != nil {
 		return fmt.Errorf("failed to convert sender balance to uint: %v", err)
 	}
+
 	if fromBalance < amount {
 		return fmt.Errorf("sender %s does not have enough balance for token %s", from, tokenID)
 	}
@@ -188,10 +265,12 @@ func (c *TokenERC1155Contract) TransferToken(ctx contractapi.TransactionContextI
 	if err != nil {
 		return fmt.Errorf("failed to create composite key for receiver balance: %v", err)
 	}
+
 	toBalanceBytes, err := ctx.GetStub().GetState(toBalanceKey)
 	if err != nil {
 		return fmt.Errorf("failed to read receiver balance: %v", err)
 	}
+
 	toBalance := uint64(0)
 	if toBalanceBytes != nil {
 		toBalance, err = strconv.ParseUint(string(toBalanceBytes), 10, 64)
@@ -200,18 +279,17 @@ func (c *TokenERC1155Contract) TransferToken(ctx contractapi.TransactionContextI
 		}
 	}
 	toBalance += amount
-	err = ctx.GetStub().PutState(toBalanceKey, []byte(fmt.Sprintf("%d", toBalance)))
-	if err != nil {
-		return fmt.Errorf("failed to update receiver balance: %v", err)
-	}
 
-	// 송신자의 잔고 업데이트
-	fromBalance -= amount
-	err = ctx.GetStub().PutState(fromBalanceKey, []byte(fmt.Sprintf("%d", fromBalance)))
+	// 송신자와 받는 사람의 잔고 업데이트를 한 번에 처리하기 위해 트랜잭션 내부에서 수행
+	err = ctx.GetStub().PutState(fromBalanceKey, []byte(fmt.Sprintf("%d", fromBalance-amount)))
 	if err != nil {
 		return fmt.Errorf("failed to update sender balance: %v", err)
 	}
 
+	err = ctx.GetStub().PutState(toBalanceKey, []byte(fmt.Sprintf("%d", toBalance)))
+	if err != nil {
+		return fmt.Errorf("failed to update receiver balance: %v", err)
+	}
 	return nil
 }
 
