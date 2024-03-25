@@ -27,7 +27,7 @@ type Token1155 struct {
 type User struct {
 	NickName         string    `json:"NickName"`
 	MymPoint         uint64    `json:"MymPoint"`
-	OwnedToken       string    `json:"OwnedToken"`
+	OwnedToken       []string  `json:"OwnedToken"`
 	BlockCreatedTime time.Time `json:"BlockCreatedTime"`
 }
 
@@ -111,7 +111,7 @@ func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInter
 }
 
 func (c *TokenERC1155Contract) CreateUserBlock(ctx contractapi.TransactionContextInterface,
-	nickname string, mymPoint uint64, ownedToken string) error {
+	nickname string, mymPoint uint64, ownedToken []string) error {
 
 	// User 생성
 	user := User{
