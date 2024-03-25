@@ -31,9 +31,14 @@ type User struct {
 	BlockCreatedTime time.Time `json:"BlockCreatedTime"`
 }
 
-type QueryResult struct {
+type QueryResultToken struct {
 	Key    string    `json:"Key"`
 	Record Token1155 `json:"Record"`
+}
+
+type QueryResultUser struct {
+	Key    string `json:"Key"`
+	Record User   `json:"Record"`
 }
 
 const (
@@ -105,8 +110,8 @@ func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInter
 	return &token, nil
 }
 
-func (c *TokenERC1155Contract) CreateUserBlock(ctx contractapi.TransactionContextInterface, nickname string,
-	mymPoint uint64, ownedToken string) error {
+func (c *TokenERC1155Contract) CreateUserBlock(ctx contractapi.TransactionContextInterface,
+	nickname string, mymPoint uint64, ownedToken string) error {
 
 	// User 생성
 	user := User{
@@ -130,16 +135,16 @@ func (c *TokenERC1155Contract) CreateUserBlock(ctx contractapi.TransactionContex
 	return nil
 }
 
-func (c *TokenERC1155Contract) UpdateMymPoint(ctx contractapi.TransactionContextInterface, nickname string, delta int64) error {
+func (c *TokenERC1155Contract) UpdateMymPoint(ctx contractapi.TransactionContextInterface, nickName string, delta uint64) error {
 
 	// 기존 유저 정보 가져오기
-	userKey := nickname
+	userKey := nickName
 	userBytes, err := ctx.GetStub().GetState(userKey)
 	if err != nil {
 		return fmt.Errorf("failed to read user block: %v", err)
 	}
 	if userBytes == nil {
-		return fmt.Errorf("user with nickname %s does not exist", nickname)
+		return fmt.Errorf("user with nickname %s does not exist", nickName)
 	}
 
 	var user User
@@ -190,7 +195,7 @@ func (c *TokenERC1155Contract) GetToken(ctx contractapi.TransactionContextInterf
 	return &token, nil
 }
 
-func (c *TokenERC1155Contract) GetAllTokens(ctx contractapi.TransactionContextInterface) ([]QueryResult, error) {
+func (c *TokenERC1155Contract) GetAllTokens(ctx contractapi.TransactionContextInterface) ([]QueryResultToken, error) {
 
 	resultsIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(tokenPrefix, []string{})
 	if err != nil {
@@ -198,7 +203,7 @@ func (c *TokenERC1155Contract) GetAllTokens(ctx contractapi.TransactionContextIn
 	}
 	defer resultsIterator.Close()
 
-	var results []QueryResult
+	var results []QueryResultToken
 
 	for resultsIterator.HasNext() {
 		queryResponse, err := resultsIterator.Next()
@@ -212,9 +217,66 @@ func (c *TokenERC1155Contract) GetAllTokens(ctx contractapi.TransactionContextIn
 			return nil, fmt.Errorf("failed to unmarshal token: %v", err)
 		}
 
-		results = append(results, QueryResult{
+		results = append(results, QueryResultToken{
 			Key:    queryResponse.Key,
 			Record: token,
+		})
+	}
+
+	return results, nil
+}
+
+func (c *TokenERC1155Contract) GetUser(ctx contractapi.TransactionContextInterface, nickName string) (*User, error) {
+
+	tokenKey, err := ctx.GetStub().CreateCompositeKey(tokenPrefix, []string{nickName})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create composite key: %v", err)
+	}
+
+	tokenBytes, err := ctx.GetStub().GetState(tokenKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get state: %v", err)
+	}
+
+	if tokenBytes == nil {
+		return nil, fmt.Errorf("token with ID %s does not exist", nickName)
+	}
+
+	var user User
+
+	err = json.Unmarshal(tokenBytes, &user)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal token: %v", err)
+	}
+
+	return &user, nil
+}
+
+func (c *TokenERC1155Contract) GetAllUsers(ctx contractapi.TransactionContextInterface) ([]QueryResultUser, error) {
+
+	resultsIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(tokenPrefix, []string{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get state by partial composite key: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	var results []QueryResultUser
+
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get next query response: %v", err)
+		}
+
+		var user User
+		err = json.Unmarshal(queryResponse.Value, &user)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal user: %v", err)
+		}
+
+		results = append(results, QueryResultUser{
+			Key:    queryResponse.Key,
+			Record: user,
 		})
 	}
 
