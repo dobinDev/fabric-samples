@@ -19,6 +19,7 @@ type Token1155 struct {
 	CategoryCode     uint64    `json:"CategoryCode"`
 	PollingResultID  uint64    `json:"PollingResultID"`
 	TokenType        string    `json:"TokenType"`
+	SellStage        string    `json:"sellStage"`
 	TokenCreatedTime time.Time `json:"TokenCreatedTime"`
 }
 
@@ -44,9 +45,8 @@ const (
 	balancePrefix = "balance"
 )
 
-func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInterface,
-	tokenID string, categoryCode uint64, pollingResultID uint64, tokenType string,
-	totalTicket uint64, amount uint64) (*Token1155, error) {
+func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInterface, tokenID string,
+	categoryCode uint64, pollingResultID uint64, tokenType string, sellStage string) (*Token1155, error) {
 
 	// UUID 생성
 	uuid := uuid.New()
@@ -73,6 +73,7 @@ func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInter
 		CategoryCode:     categoryCode,
 		PollingResultID:  pollingResultID,
 		TokenType:        tokenType,
+		SellStage:        sellStage,
 		TokenCreatedTime: time.Now(), // 현재 시간 사용
 	}
 
@@ -90,17 +91,6 @@ func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInter
 	err = ctx.GetStub().PutState(tokenKey, tokenBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to put state: %v", err)
-	}
-
-	// TokenID, Amount 저장
-	balanceKey, err := ctx.GetStub().CreateCompositeKey(balancePrefix, []string{tokenID})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create composite key for balance: %v", err)
-	}
-
-	err = ctx.GetStub().PutState(balanceKey, []byte(fmt.Sprintf("%d", amount)))
-	if err != nil {
-		return nil, fmt.Errorf("failed to update balance: %v", err)
 	}
 
 	return &token, nil
