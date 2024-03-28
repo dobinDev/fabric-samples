@@ -19,8 +19,6 @@ type Token1155 struct {
 	CategoryCode     uint64    `json:"CategoryCode"`
 	PollingResultID  uint64    `json:"PollingResultID"`
 	TokenType        string    `json:"TokenType"`
-	TotalTicket      uint64    `json:"TotalTicket"`
-	Amount           uint64    `json:"Amount"`
 	TokenCreatedTime time.Time `json:"TokenCreatedTime"`
 }
 
@@ -75,8 +73,6 @@ func (c *TokenERC1155Contract) MintToken(ctx contractapi.TransactionContextInter
 		CategoryCode:     categoryCode,
 		PollingResultID:  pollingResultID,
 		TokenType:        tokenType,
-		TotalTicket:      totalTicket,
-		Amount:           amount,
 		TokenCreatedTime: time.Now(), // 현재 시간 사용
 	}
 
